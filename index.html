@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rekap Debit &amp; Credit per Bank Code</title>
+    <style>
+        :root {
+            --bg: #0f1420;
+            --panel: #161d2e;
+            --panel-alt: #1c2438;
+            --border: #2a3350;
+            --text: #e7ebf5;
+            --muted: #8b96b3;
+            --accent: #4fd1c5;
+            --debit: #f4736a;
+            --credit: #62d38a;
+            --highlight1: #f5b942;
+            --highlight2: #c792ea;
+            --header-font: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--header-font);
+            background: radial-gradient(1200px 600px at 10% -10%, #1b2540 0%, var(--bg) 60%);
+            color: var(--text);
+            padding: 32px 20px 60px;
+        }
+
+        .wrap {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 22px;
+            margin: 0 0 4px;
+            letter-spacing: 0.2px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+
+        .paste-panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 24px;
+        }
+
+        .paste-panel .paste-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+
+        .paste-panel .paste-title {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .paste-panel .paste-title .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        .paste-toggle-chevron {
+            color: var(--muted);
+            font-size: 11px;
+            transition: transform 0.2s ease;
+        }
+
+        .paste-toggle-chevron.open {
+            transform: rotate(180deg);
+        }
+
+        .paste-body {
+            display: none;
+        }
+
+        .paste-body.open {
+            display: block;
+        }
+
+        .paste-body textarea {
+            width: 100%;
+            min-height: 140px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-family: 'Consolas', 'SF Mono', monospace;
+            font-size: 11.5px;
+            resize: vertical;
+            outline: none;
+        }
+
+        .paste-body textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .paste-hint {
+            font-size: 11.5px;
+            color: var(--muted);
+            margin: 8px 0 12px;
+            line-height: 1.5;
+        }
+
+        .paste-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 9px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .btn:hover {
+            opacity: 0.85;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #0b1420;
+        }
+
+        .btn-secondary {
+            background: var(--panel-alt);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .paste-msg {
+            font-size: 12.5px;
+            padding: 4px 0;
+        }
+
+        .paste-msg.error {
+            color: var(--debit);
+        }
+
+        .paste-msg.success {
+            color: var(--credit);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-bottom: 28px;
+        }
+
+        .summary-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+        }
+
+        .summary-card .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .summary-card .value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .summary-card.debit .value {
+            color: var(--debit);
+        }
+
+        .summary-card.credit .value {
+            color: var(--credit);
+        }
+
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin: 30px 2px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title.special1 {
+            color: var(--highlight1);
+        }
+
+        .section-title.special2 {
+            color: var(--highlight2);
+        }
+
+        .section-sub {
+            font-size: 12px;
+            color: var(--muted);
+            margin: -6px 2px 12px;
+        }
+
+        table.main {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        table.main.special1 {
+            border-color: rgba(245, 185, 66, 0.4);
+        }
+
+        table.main.special2 {
+            border-color: rgba(199, 146, 234, 0.4);
+        }
+
+        table.main thead th {
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel-alt);
+        }
+
+        table.main thead th.num,
+        table.main tbody td.num {
+            text-align: right;
+        }
+
+        .bank-row {
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s ease;
+        }
+
+        .bank-row:hover {
+            background: rgba(79, 209, 197, 0.06);
+        }
+
+        .bank-row td {
+            padding: 14px;
+            font-size: 14px;
+        }
+
+        .bank-row .bank-name {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chevron {
+            display: inline-block;
+            transition: transform 0.2s ease;
+            color: var(--accent);
+            font-size: 11px;
+        }
+
+        .bank-row.open .chevron {
+            transform: rotate(90deg);
+        }
+
+        td.debit-cell {
+            color: var(--debit);
+            font-variant-numeric: tabular-nums;
+        }
+
+        td.credit-cell {
+            color: var(--credit);
+            font-variant-numeric: tabular-nums;
+        }
+
+        td.count-cell {
+            color: var(--muted);
+        }
+
+        .detail-row {
+            display: none;
+        }
+
+        .detail-row.open {
+            display: table-row;
+        }
+
+        .detail-row td {
+            padding: 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .detail-inner {
+            padding: 4px 14px 16px;
+        }
+
+        table.detail {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+        }
+
+        table.detail th {
+            text-align: left;
+            color: var(--muted);
+            font-weight: 500;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table.detail th.num,
+        table.detail td.num {
+            text-align: right;
+        }
+
+        table.detail td {
+            padding: 6px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            color: #cdd4e6;
+        }
+
+        table.detail tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            background: rgba(98, 211, 138, 0.12);
+            color: var(--credit);
+        }
+
+        tfoot td {
+            padding: 14px;
+            font-weight: 700;
+            font-size: 14px;
+            background: var(--panel-alt);
+        }
+
+        .empty-note {
+            padding: 18px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+            background: var(--panel);
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+        }
+
+        .footer-note {
+            color: var(--muted);
+            font-size: 11.5px;
+            margin-top: 18px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h1>Rekap BANK STATEMENT Debit &amp; Credit </h1>
+        <div class="subtitle">Dikelompokkan otomatis berdasarkan Bank Code, dengan dua nominal debit khusus dipisah
+            tersendiri.</div>
+
+        <div class="paste-panel">
+            <div class="paste-header" id="pasteHeader">
+                <div class="paste-title"><span class="dot"></span>Tempel Data Transaksi Baru</div>
+                <span class="paste-toggle-chevron" id="pasteChevron">&#9660;</span>
+            </div>
+            <div class="paste-body" id="pasteBody">
+                <div class="paste-hint">
+                    Tempel data mentah (format tab/Excel) di kotak bawah ini &mdash; termasuk baris header-nya. Kolom
+                    yang dibaca: <b>Bank Code</b>, <b>Account To</b>, <b>Debit</b>, <b>Credit</b>, <b>Transfer Time</b>,
+                    <b>Status</b>, <b>Remarks</b>, <b>LBT Ref Transaction Id</b>. Menekan "Proses Data" akan mengganti
+                    seluruh data yang sedang ditampilkan.
+                </div>
+                <textarea id="pasteArea" placeholder="Tempel data di sini..."></textarea>
+                <div class="paste-msg" id="pasteMsg"></div>
+                <div class="paste-actions" style="margin-top:10px;">
+                    <button class="btn btn-primary" id="processBtn">Proses Data</button>
+                    <button class="btn btn-secondary" id="resetBtn">Kembalikan ke Data Awal</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-grid" id="summaryGrid"></div>
+
+        <div class="section-title">Rekap per Bank Code</div>
+        <div class="section-sub">Semua transaksi (termasuk nominal Rp 6.500 dan Rp 2.500) tetap dihitung di sini per
+            bank code.</div>
+        <table class="main">
+            <thead>
+                <tr>
+                    <th>Bank Code</th>
+                    <th class="num">Jumlah Transaksi</th>
+                    <th class="num">Total Debit</th>
+                    <th class="num">Total Credit</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+            <tfoot>
+                <tr>
+                    <td>TOTAL</td>
+                    <td class="num" id="footCount"></td>
+                    <td class="num" id="footDebit" style="color: var(--debit);"></td>
+                    <td class="num" id="footCredit" style="color: var(--credit);"></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="section-title special1">BIAYA Rp 6.500,00 &mdash; </div>
+        <div class="section-sub">TOTAL BIAYA Rp 2.500,00,per bank code.</div>
+        <div id="special1Container"></div>
+
+        <div class="section-title special2">BIAYA Rp 2.500,00 &mdash;</div>
+        <div class="section-sub">TOTAL BIAYA Rp 2.500,00,per bank code.</div>
+        <div id="special2Container"></div>
+
+        <div class="footer-note" id="footerNote"></div>
+    </div>
+
+    <script>
+        const originalRecords = [];
+        let records = originalRecords.slice();
+
+const SPECIAL_1 = 6500;
+const SPECIAL_2 = 2500;
+
+function fmt(n) {
+  return n.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function numParse(s) {
+  if (!s) return 0;
+  const cleaned = s.replace(/[^0-9,.\-]/g, '').replace(/,/g, '');
+  const v = parseFloat(cleaned);
+  return isNaN(v) ? 0 : v;
+}
+
+// ---- Paste & parse logic ----
+const pasteHeader = document.getElementById('pasteHeader');
+const pasteBody = document.getElementById('pasteBody');
+const pasteChevron = document.getElementById('pasteChevron');
+pasteHeader.addEventListener('click', () => {
+  pasteBody.classList.toggle('open');
+  pasteChevron.classList.toggle('open');
+});
+
+const pasteMsg = document.getElementById('pasteMsg');
+
+function parsePastedData(raw) {
+  const lines = raw.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length < 2) throw new Error('Data terlalu pendek. Pastikan menyertakan baris header dan minimal satu baris data.');
+
+  let headerIdx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf('Bank Code') !== -1) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) throw new Error('Baris header tidak ditemukan (harus mengandung kolom "Bank Code").');
+
+  const headers = lines[headerIdx].split('\t').map(h => h.trim());
+  const colIdx = {};
+  headers.forEach((h, i) => { colIdx[h] = i; });
+
+  const required = ['Bank Code', 'Debit', 'Credit'];
+  for (const r of required) {
+    if (!(r in colIdx)) throw new Error(`Kolom wajib "${r}" tidak ditemukan di header.`);
+  }
+
+  const parsed = [];
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const cols = lines[i].split('\t');
+    const bankCode = (cols[colIdx['Bank Code']] || '').trim();
+    if (!bankCode) continue;
+    parsed.push({
+      bank_code: bankCode,
+      account_to: colIdx['Account To'] !== undefined ? (cols[colIdx['Account To']] || '').trim() : '',
+      debit: numParse(cols[colIdx['Debit']] || '0'),
+      credit: numParse(cols[colIdx['Credit']] || '0'),
+      time: colIdx['Transfer Time'] !== undefined ? (cols[colIdx['Transfer Time']] || '').trim() : '',
+      status: colIdx['Status'] !== undefined ? (cols[colIdx['Status']] || '').trim() : '',
+      remarks: colIdx['Remarks'] !== undefined ? (cols[colIdx['Remarks']] || '').trim() : '',
+      ref_id: colIdx['LBT Ref Transaction Id'] !== undefined ? (cols[colIdx['LBT Ref Transaction Id']] || '').trim() : '',
+    });
+  }
+  if (parsed.length === 0) throw new Error('Tidak ada baris data valid yang bisa dibaca.');
+  return parsed;
+}
+
+document.getElementById('processBtn').addEventListener('click', () => {
+  const raw = document.getElementById('pasteArea').value;
+  pasteMsg.className = 'paste-msg';
+  pasteMsg.textContent = '';
+  if (!raw.trim()) {
+    pasteMsg.className = 'paste-msg error';
+    pasteMsg.textContent = 'Kotak data masih kosong.';
+    return;
+  }
+  try {
+    const newRecords = parsePastedData(raw);
+    records = newRecords;
+    pasteMsg.className = 'paste-msg success';
+    pasteMsg.textContent = `Berhasil memproses ${newRecords.length} baris transaksi. Tabel di bawah sudah diperbarui.`;
+    render();
+  } catch (e) {
+    pasteMsg.className = 'paste-msg error';
+    pasteMsg.textContent = 'Gagal memproses: ' + e.message;
+  }
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  records = originalRecords.slice();
+  document.getElementById('pasteArea').value = '';
+  pasteMsg.className = 'paste-msg success';
+  pasteMsg.textContent = 'Dikembalikan ke data awal.';
+  render();
+});
+
+function buildDetailRow(items, extraCols) {
+  const detailRow = document.createElement('tr');
+  detailRow.className = 'detail-row';
+  const itemsHtml = items.map(it => `
+    <tr>
+      <td>${it.time}</td>
+      <td>${it.account_to}</td>
+      <td class="num" style="color:var(--debit)">${it.debit ? fmt(it.debit) : '-'}</td>
+      <td class="num" style="color:var(--credit)">${it.credit ? fmt(it.credit) : '-'}</td>
+      <td><span class="status-pill">${it.status || '-'}</span></td>
+      <td>${it.remarks || '-'}</td>
+    </tr>
+  `).join('');
+  detailRow.innerHTML = `
+    <td colspan="${extraCols}">
+      <div class="detail-inner">
+        <table class="detail">
+          <thead><tr><th>Waktu Transfer</th><th>Account To</th><th class="num">Debit</th><th class="num">Credit</th><th>Status</th><th>Remarks</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+      </div>
+    </td>
+  `;
+  return detailRow;
+}
+
+function renderGroupTable(items, colspan) {
+  // group by bank code
+  const groups = {};
+  items.forEach(r => {
+    if (!groups[r.bank_code]) groups[r.bank_code] = { debit: 0, credit: 0, items: [] };
+    groups[r.bank_code].debit += r.debit;
+    groups[r.bank_code].credit += r.credit;
+    groups[r.bank_code].items.push(r);
+  });
+  const bankCodes = Object.keys(groups).sort((a, b) => groups[b].debit - groups[a].debit);
+  let totalDebit = 0, totalCount = 0;
+  bankCodes.forEach(b => { totalDebit += groups[b].debit; totalCount += groups[b].items.length; });
+
+  const table = document.createElement('table');
+  table.className = 'main';
+  table.innerHTML = `
+    <thead>
+      <tr><th>Bank Code</th><th class="num">Jumlah Transaksi</th><th class="num">Total Debit</th></tr>
+    </thead>
+    <tbody></tbody>
+    <tfoot><tr><td>TOTAL</td><td class="num">${totalCount}</td><td class="num" style="color:var(--debit)">${fmt(totalDebit)}</td></tr></tfoot>
+  `;
+  const tbody = table.querySelector('tbody');
+  bankCodes.forEach(bank => {
+    const g = groups[bank];
+    const row = document.createElement('tr');
+    row.className = 'bank-row';
+    row.innerHTML = `
+      <td class="bank-name"><span class="chevron">&#9656;</span>${bank}</td>
+      <td class="num count-cell">${g.items.length}</td>
+      <td class="num debit-cell">${fmt(g.debit)}</td>
+    `;
+    const detailRow = buildDetailRow(g.items, 3);
+    row.addEventListener('click', () => { row.classList.toggle('open'); detailRow.classList.toggle('open'); });
+    tbody.appendChild(row);
+    tbody.appendChild(detailRow);
+  });
+  return table;
+}
+
+// ---- Render logic ----
+function render() {
+  // === Per bank code (all data) ===
+  const groups = {};
+  records.forEach(r => {
+    if (!groups[r.bank_code]) groups[r.bank_code] = { debit: 0, credit: 0, items: [] };
+    groups[r.bank_code].debit += r.debit;
+    groups[r.bank_code].credit += r.credit;
+    groups[r.bank_code].items.push(r);
+  });
+  const bankCodes = Object.keys(groups).sort((a, b) => groups[b].debit - groups[a].debit);
+
+  let totalDebit = 0, totalCredit = 0, totalCount = 0;
+  bankCodes.forEach(b => { totalDebit += groups[b].debit; totalCredit += groups[b].credit; totalCount += groups[b].items.length; });
+
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-card"><div class="label">Total Bank Code</div><div class="value">${bankCodes.length}</div></div>
+    <div class="summary-card"><div class="label">Total Transaksi</div><div class="value">${totalCount}</div></div>
+    <div class="summary-card debit"><div class="label">Total Debit</div><div class="value">${fmt(totalDebit)}</div></div>
+    <div class="summary-card credit"><div class="label">Total Credit</div><div class="value">${fmt(totalCredit)}</div></div>
+  `;
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+  bankCodes.forEach(bank => {
+    const g = groups[bank];
+    const bankRow = document.createElement('tr');
+    bankRow.className = 'bank-row';
+    bankRow.innerHTML = `
+      <td class="bank-name"><span class="chevron">&#9656;</span>${bank}</td>
+      <td class="num count-cell">${g.items.length}</td>
+      <td class="num debit-cell">${fmt(g.debit)}</td>
+      <td class="num credit-cell">${fmt(g.credit)}</td>
+    `;
+    const detailRow = buildDetailRow(g.items, 4);
+    bankRow.addEventListener('click', () => { bankRow.classList.toggle('open'); detailRow.classList.toggle('open'); });
+    tbody.appendChild(bankRow);
+    tbody.appendChild(detailRow);
+  });
+
+  document.getElementById('footCount').textContent = totalCount;
+  document.getElementById('footDebit').textContent = fmt(totalDebit);
+  document.getElementById('footCredit').textContent = fmt(totalCredit);
+  document.getElementById('footerNote').textContent = `Menampilkan ${bankCodes.length} bank code yang muncul di data saat ini.`;
+
+  // === Special nominal 1: Rp 6.500 ===
+  const items1 = records.filter(r => r.debit === SPECIAL_1);
+  const container1 = document.getElementById('special1Container');
+  container1.innerHTML = '';
+  if (items1.length === 0) {
+    container1.innerHTML = `<div class="empty-note">Tidak ada transaksi dengan debit persis Rp ${fmt(SPECIAL_1)} di data saat ini.</div>`;
+  } else {
+    const table1 = renderGroupTable(items1, 3);
+    table1.classList.add('special1');
+    container1.appendChild(table1);
+  }
+
+  // === Special nominal 2: Rp 2.500 ===
+  const items2 = records.filter(r => r.debit === SPECIAL_2);
+  const container2 = document.getElementById('special2Container');
+  container2.innerHTML = '';
+  if (items2.length === 0) {
+    container2.innerHTML = `<div class="empty-note">Tidak ada transaksi dengan debit persis Rp ${fmt(SPECIAL_2)} di data saat ini.</div>`;
+  } else {
+    const table2 = renderGroupTable(items2, 3);
+    table2.classList.add('special2');
+    container2.appendChild(table2);
+  }
+}
+
+render();
+    </script>
+</body>
+
+</html>
