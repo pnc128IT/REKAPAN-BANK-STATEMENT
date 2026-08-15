@@ -515,54 +515,79 @@
 
         let currentData = [];
 
+        // Daftar kode bank yang dikenali. Pencocokan dilakukan per-kolom (exact match),
+        // BUKAN substring di seluruh baris — supaya kode channel seperti "BRI_JAY_6504"
+        // tidak salah kebaca sebagai bank "BRI" hanya karena mengandung kata itu.
+        const KNOWN_BANKS = ['SEABANK', 'BANK JAGO', 'JAGO', 'DANA2', 'DANA', 'GOPAY', 'BCA', 'BNI', 'BRI', 'MANDIRI', 'QRIS', 'OVO'];
+
+        function normalizeBankCode(value) {
+            const v = (value || '').trim().toUpperCase();
+            if (!v) return null;
+            if (KNOWN_BANKS.includes(v)) {
+                return v === 'JAGO' ? 'BANK JAGO' : v;
+            }
+            return null;
+        }
+
         function parseRawText(text) {
             if (!text) return [];
 
-            let cleanText = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ');
-            const blocks = cleanText.split(/(?=id_\d+)/i);
+            // Data mentah berbentuk tabel: satu transaksi = satu baris, kolom dipisah TAB.
+            const lines = text.split(/\r?\n/);
             const parsed = [];
+            let counter = 0;
 
-            blocks.forEach((block, index) => {
-                const str = block.trim();
-                if (!str || !str.match(/id_\d+/i)) return;
+            lines.forEach((rawLine) => {
+                if (!rawLine || !rawLine.trim()) return;
+                if (!/id_\d+/i.test(rawLine)) return; // lewati baris kosong / bukan transaksi
 
-                const idMatch = str.match(/id_\d+/i);
-                const orderId = idMatch ? idMatch[0] : `TX-${index+1}`;
+                const f = rawLine.split('\t').map(x => x.trim());
+                counter++;
 
+                // --- Order ID: cari kolom yang persis "id_xxxxx" ---
+                let orderId = `TX-${counter}`;
+                const idField = f.find(x => /^id_\d+$/i.test(x));
+                if (idField) orderId = idField;
+                else {
+                    const idMatch = rawLine.match(/id_\d+/i);
+                    if (idMatch) orderId = idMatch[0];
+                }
+
+                // --- Bank code: hanya terima kolom yang PERSIS sama dengan nama bank dikenal ---
                 let bankCode = 'UNKNOWN';
-                const bankMatch = str.match(/(SEABANK|BANK JAGO|JAGO|DANA2|DANA|GOPAY|BCA|BNI|BRI|MANDIRI|QRIS|OVO)/i);
-                if (bankMatch) {
-                    bankCode = bankMatch[1].toUpperCase();
-                    if (bankCode === 'JAGO') bankCode = 'BANK JAGO';
+                for (let i = 0; i < f.length; i++) {
+                    // kolom index 0 & 7 biasanya kode channel (mis. "BRI_JAY_6504"), bukan bank asli — lewati
+                    if (i === 0) continue;
+                    const nb = normalizeBankCode(f[i]);
+                    if (nb) { bankCode = nb; break; }
                 }
 
-                const dateMatch = str.match(/\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}/);
-                const dateStr = dateMatch ? dateMatch[0] : '-';
+                // --- Tanggal (kolom pertama yang match format tanggal) ---
+                const dateFieldIndex = f.findIndex(x => /^\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}:\d{2}$/.test(x));
+                const dateStr = dateFieldIndex !== -1 ? f[dateFieldIndex] : '-';
 
+                // --- Account to: kolom persis setelah kolom tanggal pertama ---
                 let accountTo = '-';
-                if (dateMatch) {
-                    const timePos = str.indexOf(dateMatch[0]);
-                    const afterDate = str.substring(timePos + dateMatch[0].length).trim();
-                    
-                    // Regex diubah untuk menangkap nama dengan spasi
-                    const accMatch = afterDate.match(/^([a-zA-Z0-9_\-\s]+?)(?=\s*[\d,]+\.\d{2})/);
-                    if (accMatch && accMatch[1]) {
-                        accountTo = accMatch[1].trim();
-                    }
+                if (dateFieldIndex !== -1 && f[dateFieldIndex + 1]) {
+                    accountTo = f[dateFieldIndex + 1];
                 }
 
+                // --- Debit / Credit: dua kolom angka persis setelah account_to ---
                 let debit = 0;
                 let credit = 0;
-                const matches = str.match(/(-?[\d,]+\.\d{2})/g);
-                if (matches && matches.length >= 2) {
-                    debit = parseFloat(matches[0].replace(/,/g, '')) || 0;
-                    credit = parseFloat(matches[1].replace(/,/g, '')) || 0;
+                if (dateFieldIndex !== -1) {
+                    const debitStr = f[dateFieldIndex + 2] || '0';
+                    const creditStr = f[dateFieldIndex + 3] || '0';
+                    debit = parseFloat(debitStr.replace(/,/g, '')) || 0;
+                    credit = parseFloat(creditStr.replace(/,/g, '')) || 0;
                 }
 
+                // --- Remarks: kolom persis setelah status "Normal" ---
                 let remarks = 'Transaksi Berhasil';
-                if (str.includes('WDFee')) remarks = 'WDFee';
-                else if (str.includes('Transfer Berhasil')) remarks = 'Transfer Berhasil';
-                else if (str.includes('TOP UP')) remarks = 'TOP UP';
+                const statusIdx = f.findIndex(x => x === 'Normal');
+                if (statusIdx !== -1 && f[statusIdx + 1]) {
+                    remarks = f[statusIdx + 1];
+                }
 
                 parsed.push({
                     order_id: orderId,
@@ -576,6 +601,14 @@
             });
 
             return parsed;
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
 
         function formatIDR(amount) {
@@ -667,13 +700,13 @@
                 sumCredit += it.credit;
                 return `
                     <tr>
-                        <td>${it.order_id}</td>
-                        <td>${it.date}</td>
-                        <td>${it.bank_code}</td>
-                        <td><strong style="color: #ff4d4d;">${it.account_to}</strong></td>
+                        <td>${escapeHtml(it.order_id)}</td>
+                        <td>${escapeHtml(it.date)}</td>
+                        <td>${escapeHtml(it.bank_code)}</td>
+                        <td><strong style="color: #ff4d4d;">${escapeHtml(it.account_to)}</strong></td>
                         <td style="text-align:right;" class="debit-cell">${formatIDR(it.debit)}</td>
                         <td style="text-align:right;" class="credit-cell">${formatIDR(it.credit)}</td>
-                        <td><span class="remarks-tag">${it.remarks}</span></td>
+                        <td><span class="remarks-tag">${escapeHtml(it.remarks)}</span></td>
                     </tr>
                 `;
             }).join('');
@@ -694,7 +727,7 @@
                     <tbody>
                         <tr class="bank-row" onclick="toggleRowDetail('${detailId}', this)">
                             <td class="bank-name">
-                                <span class="arrow-icon">▶</span> ${categoryTitle}
+                                <span class="arrow-icon">▶</span> ${escapeHtml(categoryTitle)}
                             </td>
                             <td class="num">${items.length} tx</td>
                             <td class="num debit-cell">${formatIDR(sumDebit)}</td>
